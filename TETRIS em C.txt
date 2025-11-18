@@ -1,0 +1,430 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+// --- CONSTANTES E DEFINIÇÕES ---
+#define FILA_SIZE 5    // Capacidade fixa da fila de peças futuras
+#define PILHA_SIZE 3   // Capacidade limitada da pilha de reserva
+#define TROCA_MULTIPLA 3 // Número de peças para a troca múltipla
+
+// --- ESTRUTURA DE DADOS ---
+
+/**
+ * @brief Estrutura que representa uma Peça do Tetris (Item básico).
+ */
+typedef struct {
+    char nome;          // Tipo da peça ('I', 'O', 'T', 'L', etc.)
+    int id;             // Identificador único da peça
+} Peca;
+
+/**
+ * @brief Estrutura que representa a Fila Circular de Peças.
+ */
+typedef struct {
+    Peca pecas[FILA_SIZE];
+    int frente;
+    int traseira;
+    int count;
+} FilaPecas;
+
+/**
+ * @brief Estrutura que representa a Pilha de Peças Reservadas (LIFO).
+ */
+typedef struct {
+    Peca pecas[PILHA_SIZE];
+    int topo; // Índice da última peça inserida
+} PilhaPecas;
+
+// --- VARIÁVEIS GLOBAIS ---
+FilaPecas fila;
+PilhaPecas pilha;
+int proximo_id_global = 0; // Contador global para IDs únicos
+
+// -------------------------------------------------------------------
+//                        FUNÇÕES DE GERAÇÃO E UTILIDADE
+// -------------------------------------------------------------------
+
+/**
+ * @brief Gera uma nova peça com um tipo aleatório e um ID único.
+ * @return A nova peça gerada.
+ */
+Peca gerarPeca() {
+    Peca novaPeca;
+    char tipos[] = {'I', 'O', 'T', 'L', 'J', 'S', 'Z'};
+    int indice_aleatorio = rand() % (sizeof(tipos) / sizeof(tipos[0]));
+    
+    novaPeca.nome = tipos[indice_aleatorio];
+    novaPeca.id = proximo_id_global++; // Atribui o ID atual e incrementa
+    
+    return novaPeca;
+}
+
+/**
+ * @brief Inicializa a Fila e a Pilha.
+ */
+void inicializarEstruturas() {
+    // Inicialização da Fila Circular
+    fila.frente = 0;
+    fila.traseira = -1;
+    fila.count = 0;
+
+    // Inicialização da Pilha
+    pilha.topo = -1; 
+    
+    srand(time(NULL));
+    printf("✅ Estruturas inicializadas. Fila de Peças (Capacidade %d) e Pilha de Reserva (Capacidade %d).\n", FILA_SIZE, PILHA_SIZE);
+}
+
+// -------------------------------------------------------------------
+//                          FUNÇÕES DE PILHA
+// -------------------------------------------------------------------
+
+int isPilhaFull() {
+    return pilha.topo == PILHA_SIZE - 1;
+}
+
+int isPilhaEmpty() {
+    return pilha.topo == -1;
+}
+
+/**
+ * @brief Insere uma peça no topo da pilha (PUSH).
+ * @param peca A peça a ser inserida.
+ */
+void push(Peca peca) {
+    if (isPilhaFull()) return;
+    pilha.pecas[++pilha.topo] = peca;
+}
+
+/**
+ * @brief Remove e retorna a peça do topo da pilha (POP).
+ * @return A peça removida ou uma peça nula se a pilha estiver vazia.
+ */
+Peca pop() {
+    Peca nula = {'\0', -1};
+    if (isPilhaEmpty()) return nula;
+    return pilha.pecas[pilha.topo--];
+}
+
+/**
+ * @brief Retorna a peça do topo da pilha sem removê-la (PEEK).
+ * @return A peça do topo ou uma peça nula.
+ */
+Peca peekPilha() {
+    Peca nula = {'\0', -1};
+    if (isPilhaEmpty()) return nula;
+    return pilha.pecas[pilha.topo];
+}
+
+// -------------------------------------------------------------------
+//                          FUNÇÕES DE FILA
+// -------------------------------------------------------------------
+
+int isFilaFull() {
+    return fila.count == FILA_SIZE;
+}
+
+int isFilaEmpty() {
+    return fila.count == 0;
+}
+
+/**
+ * @brief Insere uma peça no final da fila (ENQUEUE), usando lógica circular.
+ * @param peca A peça a ser inserida.
+ */
+void enqueue(Peca peca) {
+    if (isFilaFull()) {
+        // No Tetris Stack, a fila deve estar sempre cheia ou quase cheia.
+        printf("⚠️ Tentativa de Enqueue falhou: Fila cheia. (Não deveria ocorrer na mecânica do jogo)\n");
+        return;
+    }
+    fila.traseira = (fila.traseira + 1) % FILA_SIZE;
+    fila.pecas[fila.traseira] = peca;
+    fila.count++;
+}
+
+/**
+ * @brief Remove e retorna a peça da frente da fila (DEQUEUE).
+ * @return A peça removida ou uma peça nula.
+ */
+Peca dequeue() {
+    Peca nula = {'\0', -1};
+    if (isFilaEmpty()) return nula;
+
+    Peca pecaRemovida = fila.pecas[fila.frente];
+    fila.frente = (fila.frente + 1) % FILA_SIZE;
+    fila.count--;
+    return pecaRemovida;
+}
+
+/**
+ * @brief Retorna a peça da frente da fila sem removê-la (PEEK).
+ * @return A peça da frente ou uma peça nula.
+ */
+Peca peekFila() {
+    Peca nula = {'\0', -1};
+    if (isFilaEmpty()) return nula;
+    return fila.pecas[fila.frente];
+}
+
+/**
+ * @brief Mantém a fila cheia, inserindo uma nova peça gerada.
+ */
+void reabastecerFila() {
+    if (fila.count < FILA_SIZE) {
+        enqueue(gerarPeca());
+    }
+}
+
+// -------------------------------------------------------------------
+//                      MECÂNICAS AVANÇADAS DO JOGO
+// -------------------------------------------------------------------
+
+/**
+ * @brief 1. Simula "jogar" a peça da frente da fila.
+ */
+void acaoJogarPeca() {
+    Peca jogada = dequeue();
+    if (jogada.id != -1) {
+        printf("\n🔥 PEÇA JOGADA: Tipo '%c', ID %d. Fila se move.\n", jogada.nome, jogada.id);
+        reabastecerFila(); // Nova peça é adicionada ao final da fila
+    } else {
+        printf("\n🚫 ERRO: Fila está vazia, impossível jogar.\n");
+    }
+}
+
+/**
+ * @brief 2. Move a peça da frente da fila para o topo da pilha (RESERVAR).
+ */
+void acaoReservarPeca() {
+    if (isPilhaFull()) {
+        printf("\n🚫 ERRO: Pilha de reserva cheia (Máx. %d). Use a peça reservada primeiro.\n", PILHA_SIZE);
+        return;
+    }
+    
+    Peca reservada = dequeue();
+    if (reservada.id != -1) {
+        push(reservada);
+        printf("\n🔁 PEÇA RESERVADA: Tipo '%c', ID %d. Movida da Fila para Pilha.\n", reservada.nome, reservada.id);
+        reabastecerFila(); // Nova peça é adicionada ao final da fila
+    } else {
+        printf("\n🚫 ERRO: Fila está vazia, impossível reservar.\n");
+    }
+}
+
+/**
+ * @brief 3. Remove a peça do topo da pilha, simulando seu uso.
+ */
+void acaoUsarPecaReservada() {
+    Peca usada = pop();
+    if (usada.id != -1) {
+        printf("\n💎 PEÇA USADA: Tipo '%c', ID %d. Removida do topo da Pilha.\n", usada.nome, usada.id);
+        // Ação na pilha não reabastece a fila, pois a peça usada não é da fila.
+    } else {
+        printf("\n🚫 ERRO: Pilha de reserva está vazia, impossível usar.\n");
+    }
+}
+
+/**
+ * @brief 4. Troca a peça da frente da fila com o topo da pilha.
+ */
+void acaoTrocarPecaAtual() {
+    if (isFilaEmpty() || isPilhaEmpty()) {
+        printf("\n🚫 ERRO: Troca falhou. Fila ou Pilha estão vazias.\n");
+        return;
+    }
+
+    // Pega as peças para troca sem removê-las (peek)
+    Peca pecaFila = peekFila(); // A peça da frente da fila (índice: fila.frente)
+    Peca pecaPilha = peekPilha(); // A peça do topo da pilha (índice: pilha.topo)
+    
+    // 1. Remove logicamente da fila (mantendo o valor)
+    fila.frente = (fila.frente + 1) % FILA_SIZE;
+    fila.count--;
+    
+    // 2. Remove logicamente da pilha (mantendo o valor)
+    pilha.topo--;
+
+    // 3. Insere a peça da Pilha no lugar da Frente da Fila
+    fila.traseira = (fila.frente - 1 + FILA_SIZE) % FILA_SIZE;
+    fila.pecas[fila.traseira] = pecaPilha;
+    fila.frente = fila.traseira;
+    fila.count++;
+    
+    // 4. Insere a peça da Fila no lugar do Topo da Pilha
+    pilha.pecas[++pilha.topo] = pecaFila;
+
+    printf("\n🔄 TROCA RÁPIDA: A peça da Fila ('%c', ID %d) e Pilha ('%c', ID %d) foram trocadas.\n", 
+           pecaFila.nome, pecaFila.id, pecaPilha.nome, pecaPilha.id);
+    
+    // Não reabastece a fila pois não houve perda líquida de peças.
+}
+
+/**
+ * @brief 5. Troca os 3 primeiros da fila com as 3 peças da pilha.
+ */
+void acaoTrocaMultipla() {
+    if (fila.count < TROCA_MULTIPLA || pilha.topo < TROCA_MULTIPLA - 1) {
+        printf("\n🚫 ERRO: Troca Múltipla falhou. São necessários %d peças em ambas as estruturas.\n", TROCA_MULTIPLA);
+        return;
+    }
+
+    Peca tempFila[TROCA_MULTIPLA];
+    Peca tempPilha[TROCA_MULTIPLA];
+    
+    // 1. Copia os N primeiros da FILA
+    int fila_idx = fila.frente;
+    for (int i = 0; i < TROCA_MULTIPLA; i++) {
+        tempFila[i] = fila.pecas[fila_idx];
+        fila_idx = (fila_idx + 1) % FILA_SIZE;
+    }
+
+    // 2. Copia os N primeiros da PILHA (do topo para base)
+    for (int i = 0; i < TROCA_MULTIPLA; i++) {
+        tempPilha[i] = pilha.pecas[pilha.topo - i];
+    }
+    
+    // 3. Sobrescreve a FILA com as peças da PILHA
+    fila_idx = fila.frente;
+    for (int i = 0; i < TROCA_MULTIPLA; i++) {
+        fila.pecas[fila_idx] = tempPilha[i];
+        fila_idx = (fila_idx + 1) % FILA_SIZE;
+    }
+
+    // 4. Sobrescreve a PILHA com as peças da FILA (na ordem reversa, LIFO)
+    for (int i = 0; i < TROCA_MULTIPLA; i++) {
+        pilha.pecas[pilha.topo - i] = tempFila[i];
+    }
+
+    printf("\n🔁🔁 TROCA MÚLTIPLA REALIZADA: %d peças trocadas entre Fila e Pilha.\n", TROCA_MULTIPLA);
+}
+
+
+// -------------------------------------------------------------------
+//                             EXIBIÇÃO DE ESTADO
+// -------------------------------------------------------------------
+
+/**
+ * @brief Exibe o estado atual da Fila.
+ */
+void exibirFila() {
+    printf("Fila de peças (%d/%d): ", fila.count, FILA_SIZE);
+
+    if (isFilaEmpty()) {
+        printf("(Vazia)\n");
+        return;
+    }
+
+    int i = fila.frente;
+    for (int j = 0; j < fila.count; j++) {
+        printf("[%c %d]", fila.pecas[i].nome, fila.pecas[i].id);
+        if (j < fila.count - 1) {
+            printf(" -> ");
+        }
+        i = (i + 1) % FILA_SIZE;
+    }
+    printf("\n");
+}
+
+/**
+ * @brief Exibe o estado atual da Pilha (Topo -> Base).
+ */
+void exibirPilha() {
+    printf("Pilha de reserva (Topo -> Base) (%d/%d): ", pilha.topo + 1, PILHA_SIZE);
+
+    if (isPilhaEmpty()) {
+        printf("(Vazia)\n");
+        return;
+    }
+
+    for (int i = pilha.topo; i >= 0; i--) {
+        printf("[%c %d]", pilha.pecas[i].nome, pilha.pecas[i].id);
+        if (i > 0) {
+            printf(" -> ");
+        }
+    }
+    printf("\n");
+}
+
+/**
+ * @brief Exibe o estado completo da simulação.
+ */
+void exibirEstado() {
+    printf("\n\n--- ESTADO ATUAL DO JOGO ---\n");
+    exibirFila();
+    exibirPilha();
+    printf("---------------------------\n");
+}
+
+
+// -------------------------------------------------------------------
+//                        FUNÇÃO PRINCIPAL E MENU
+// -------------------------------------------------------------------
+
+void exibirMenu() {
+    printf("\n==================================\n");
+    printf("👾 Tetris Stack: Controle AVANÇADO\n");
+    printf("==================================\n");
+    printf("Código | Ação\n");
+    printf("----------------------------------\n");
+    printf("  1    | Jogar peça da frente da fila\n");
+    printf("  2    | Reservar peça (Fila -> Pilha)\n");
+    printf("  3    | Usar peça reservada (Pop Pilha)\n");
+    printf("  4    | Trocar peça da frente da fila com o topo da pilha\n");
+    printf("  5    | Trocar os %d primeiros da fila com as %d peças da pilha\n", TROCA_MULTIPLA, TROCA_MULTIPLA);
+    printf("  0    | Sair\n");
+    printf("----------------------------------\n");
+    printf("Escolha uma opção: ");
+}
+
+int main() {
+    int opcao;
+
+    inicializarEstruturas();
+    
+    // 1. Pré-popula a fila para o tamanho máximo
+    printf("⚙️ Pré-populando a fila...\n");
+    while (!isFilaFull()) {
+        enqueue(gerarPeca());
+    }
+    
+    // 2. Pré-popula a pilha para a troca múltipla
+    // Remove 3 da fila e coloca na pilha, depois reabastece a fila.
+    for (int i = 0; i < PILHA_SIZE; i++) {
+        push(dequeue());
+    }
+    reabastecerFila();
+    reabastecerFila();
+    reabastecerFila(); // Garante que a fila volte a ficar cheia (FILA_SIZE)
+
+    do {
+        exibirEstado();
+        exibirMenu();
+        
+        if (scanf("%d", &opcao) != 1) {
+            printf("\nOpção inválida. Digite um número.\n");
+            int c; while ((c = getchar()) != '\n' && c != EOF); 
+            continue;
+        }
+
+        switch (opcao) {
+            case 1: acaoJogarPeca(); break;
+            case 2: acaoReservarPeca(); break;
+            case 3: acaoUsarPecaReservada(); break;
+            case 4: acaoTrocarPecaAtual(); break;
+            case 5: acaoTrocaMultipla(); break;
+            case 0: printf("\n👋 Saindo do Tetris Stack. Até a próxima rodada!\n"); break;
+            default: printf("\nOpção desconhecida! Tente novamente.\n");
+        }
+        
+        if (opcao != 0) {
+            printf("\nPressione ENTER para continuar...");
+            int c; while ((c = getchar()) != '\n' && c != EOF); 
+            getchar();
+        }
+
+    } while (opcao != 0);
+
+    return 0;
+}
